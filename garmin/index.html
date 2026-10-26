@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trainingscockpit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: Kopfband mit Filtern, KPI-Zeile, danach 2-spaltiges Raster aus Diagramm-Panels, Liste am Schluss */
+:root {
+  color-scheme: light;
+  --bg: #eef1f4;
+  --surface: #fbfcfd;
+  --ink: #0f1a24;
+  --ink-2: #4a5765;
+  --muted: #7c8794;
+  --line: #dde2e8;
+  --axis: #c2c9d1;
+  --accent: #0d63c9;
+  --accent-ink: #ffffff;
+  --good: #0a7d24;
+  --bad: #c2362f;
+  --s-run: #2a78d6; --s-bike: #eb6834; --s-swim: #1baf7a;
+  --s-hike: #eda100; --s-strength: #e87ba4; --s-other: #008300;
+  --q0: #e3e8ee; --q1: #b7d3f6; --q2: #6da7ec; --q3: #2a78d6; --q4: #184f95;
+  --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0d1217; --surface: #161d24; --ink: #edf1f5; --ink-2: #b9c3cd; --muted: #85909b;
+    --line: #26303a; --axis: #36414c; --accent: #4f97ec; --accent-ink: #0d1217;
+    --good: #3cc25a; --bad: #ef6b63;
+    --s-run: #3987e5; --s-bike: #d95926; --s-swim: #199e70;
+    --s-hike: #c98500; --s-strength: #d55181; --s-other: #008300;
+    --q0: #1f2830; --q1: #104281; --q2: #1c5cab; --q3: #3987e5; --q4: #86b6ef;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1217; --surface: #161d24; --ink: #edf1f5; --ink-2: #b9c3cd; --muted: #85909b;
+  --line: #26303a; --axis: #36414c; --accent: #4f97ec; --accent-ink: #0d1217;
+  --good: #3cc25a; --bad: #ef6b63;
+  --s-run: #3987e5; --s-bike: #d95926; --s-swim: #199e70;
+  --s-hike: #c98500; --s-strength: #d55181; --s-other: #008300;
+  --q0: #1f2830; --q1: #104281; --q2: #1c5cab; --q3: #3987e5; --q4: #86b6ef;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 15px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 16px; }
+h1, h2 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 34px; font-weight: 700; letter-spacing: .01em; line-height: 1.1; }
+h2 { font-size: 19px; font-weight: 600; letter-spacing: .02em; }
+.sub { color: var(--ink-2); margin: 2px 0 0; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+.source { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px 4px 8px; }
+.source .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+.source.sample .dot { background: var(--s-hike); }
+
+.io { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { display: inline-flex; align-items: center; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+  border-radius: 8px; padding: 5px 12px; font-size: 14px; font-weight: 500; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--ink-2); border-color: var(--line); }
+.btn:hover { filter: brightness(1.08); }
+.vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+.vh:focus-visible + .btn { outline: 2px solid var(--accent); outline-offset: 2px; }
+.msg { margin: 0; font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
+.msg.err { border-color: var(--bad); color: var(--bad); }
+body.dragging .wrap { outline: 2px dashed var(--accent); outline-offset: 8px; border-radius: 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; padding: 5px 11px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; color: var(--ink-2); }
+.seg button:hover { background: var(--bg); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface);
+  border-radius: 999px; padding: 4px 12px 4px 9px; cursor: pointer; font-size: 14px; color: var(--ink-2); }
+.chip i { width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--muted)); }
+.chip[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; background: var(--line);
+  border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.kpi { background: var(--surface); padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.kpi .v { font-family: var(--f-display); font-size: 32px; font-weight: 600; line-height: 1.1; }
+.kpi .v small { font-size: 17px; font-weight: 500; color: var(--ink-2); margin-left: 3px; }
+.delta { font-size: 13px; color: var(--muted); }
+.delta.up { color: var(--good); } .delta.down { color: var(--bad); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 16px; }
+.grid.even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-width: 0; display: grid; gap: 10px; align-content: start; }
+.panel-head { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: baseline; }
+.note { font-size: 13px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { fill: var(--muted); font: 12px var(--f-body); font-variant-numeric: tabular-nums; }
+.chart .grid-l { stroke: var(--line); stroke-width: 1; }
+.chart .base-l { stroke: var(--axis); stroke-width: 1; }
+.empty { color: var(--muted); font-size: 14px; padding: 24px 0; text-align: center; }
+
+.mix { display: grid; gap: 12px; }
+.mix-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 84px; gap: 10px; align-items: center; font-size: 14px; }
+.mix-row .bar { height: 12px; border-radius: 0 4px 4px 0; background: var(--c); min-width: 2px; }
+.mix-row .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+
+.heat-scroll { overflow-x: auto; }
+.heat-legend { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.heat-legend i { width: 11px; height: 11px; border-radius: 2px; }
+
+.bests { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.best .v { font-family: var(--f-display); font-size: 24px; font-weight: 600; line-height: 1.15; }
+.best .d { font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  border-bottom: 1px solid var(--axis); padding: 8px 10px; white-space: nowrap; }
+th button { border: 0; background: none; padding: 0; cursor: pointer; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; }
+th[aria-sort] button { color: var(--ink); }
+td { padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.name { white-space: normal; min-width: 180px; }
+td.num, th.num { text-align: right; }
+.tag { display: inline-flex; align-items: center; gap: 6px; }
+.tag i { width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
+.more { justify-self: start; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 14px; cursor: pointer; }
+.more:hover { border-color: var(--ink-2); }
+
+.tip { position: fixed; z-index: 20; pointer-events: none; background: var(--ink); color: var(--surface); border-radius: 8px;
+  padding: 8px 10px; font-size: 13px; line-height: 1.4; max-width: 240px; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.tip b { font-weight: 600; }
+.tip .r { display: flex; justify-content: space-between; gap: 14px; }
+.tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; background: var(--c); }
+
+footer { font-size: 13px; color: var(--muted); }
+footer code { font-size: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+
+@media (max-width: 1000px) {
+  .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid, .grid.even, .grid.three { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  h1 { font-size: 28px; }
+  .kpi .v { font-size: 26px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chart svg rect, .chart svg path.seg { transition: opacity .15s; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Trainingscockpit</h1>
+      <p class="sub">Aktivitäten, Umfang und Erholung aus der Garmin Health API</p>
+    </div>
+    <div class="io">
+      <span class="source" id="source"><span class="dot"></span><span id="sourceText"></span></span>
+      <input type="file" id="importFile" class="vh" accept=".js,.json,application/json,text/javascript">
+      <label class="btn" for="importFile">Daten importieren</label>
+      <button type="button" class="btn ghost" id="clearImport" hidden>Import entfernen</button>
+    </div>
+  </header>
+  <p class="msg" id="msg" role="status" hidden></p>
+
+  <div class="controls">
+    <div class="seg" id="period" role="group" aria-label="Zeitraum">
+      <button type="button" data-days="28">4 Wochen</button>
+      <button type="button" data-days="84">12 Wochen</button>
+      <button type="button" data-days="182">6 Monate</button>
+      <button type="button" data-days="365">12 Monate</button>
+      <button type="button" data-days="0">Alles</button>
+    </div>
+    <div class="chips" id="types" role="group" aria-label="Sportart"></div>
+  </div>
+
+  <section class="kpis" id="kpis" aria-label="Kennzahlen"></section>
+
+  <div class="grid">
+    <section class="panel">
+      <div class="panel-head">
+        <h2 id="volTitle">Wochenumfang</h2>
+        <div class="seg" id="metric" role="group" aria-label="Messgrösse">
+          <button type="button" data-metric="dur">Zeit</button>
+          <button type="button" data-metric="dist">Distanz</button>
+        </div>
+      </div>
+      <div class="legend" id="volLegend"></div>
+      <div class="chart" id="volChart"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Verteilung nach Sportart</h2><span class="note">Anteil Trainingszeit</span></div>
+      <div class="mix" id="mix"></div>
+      <div class="label" style="margin-top:8px">Bestwerte im Zeitraum</div>
+      <div class="bests" id="bests"></div>
+    </section>
+  </div>
+
+  <div class="grid even">
+    <section class="panel">
+      <div class="panel-head"><h2>Lauf-Pace</h2><span class="note">min/km, schneller = oben · Linie: Schnitt der letzten 5 Läufe</span></div>
+      <div class="chart" id="paceChart"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Trainingskalender</h2><span class="note">letzte 52 Wochen, Minuten pro Tag</span></div>
+      <div class="heat-scroll"><div class="chart" id="heat"></div></div>
+      <div class="heat-legend" id="heatLegend"></div>
+    </section>
+  </div>
+
+  <div class="grid three" id="health">
+    <section class="panel">
+      <div class="panel-head"><h2>Ruhepuls</h2><span class="note">bpm pro Tag</span></div>
+      <div class="chart" id="rhrChart"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Schlaf</h2><span class="note">Stunden pro Nacht</span></div>
+      <div class="chart" id="sleepChart"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Schritte</h2><span class="note">pro Tag · Linie: 7-Tage-Schnitt</span></div>
+      <div class="chart" id="stepsChart"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Aktivitäten</h2><span class="note" id="listCount"></span></div>
+    <div class="table-wrap"><table id="list"></table></div>
+    <button type="button" class="more" id="more" hidden>Weitere 25 anzeigen</button>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+  // Wird von sync.py geschrieben. Fehlt die Datei, zeigt das Dashboard Beispieldaten.
+  window.GARMIN_DATA = window.GARMIN_DATA || null;
+</script>
+<script src="data/garmin-data.js" onerror="void 0"></script>
+<script>
+(function () {
+  "use strict";
+  const DAY = 86400000;
+  const TYPES = [
+    { key: "run", label: "Laufen", unit: "km" },
+    { key: "bike", label: "Rad", unit: "km" },
+    { key: "swim", label: "Schwimmen", unit: "km" },
+    { key: "hike", label: "Wandern/Gehen", unit: "km" },
+    { key: "strength", label: "Kraft/Fitness", unit: "" },
+    { key: "other", label: "Andere", unit: "km" }
+  ];
+  const TYPE = Object.fromEntries(TYPES.map(t => [t.key, t]));
+  const col = k => `var(--s-${k})`;
+
+  // ---------- Formatierung (de-CH: 1'234,5 wird als 1’234.5 dargestellt)
+  const nf = (d = 0) => new Intl.NumberFormat("de-CH", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const num = (v, d = 0) => nf(d).format(v);
+  const dateFmt = new Intl.DateTimeFormat("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const shortDate = new Intl.DateTimeFormat("de-CH", { day: "numeric", month: "short" });
+  const monthFmt = new Intl.DateTimeFormat("de-CH", { month: "short" });
+  const monthYear = new Intl.DateTimeFormat("de-CH", { month: "short", year: "2-digit" });
+  const weekday = new Intl.DateTimeFormat("de-CH", { weekday: "short" });
+  function hm(sec) {
+    const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+    return h ? `${h} h ${String(m).padStart(2, "0")}` : `${m} min`;
+  }
+  function clock(sec) {
+    sec = Math.round(sec);
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
+  }
+  const pace = s => clock(s) + " /km";
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const startOfWeek = d => { const s = startOfDay(d); s.setDate(s.getDate() - ((s.getDay() + 6) % 7)); return s; };
+  const parseLocal = s => { const [a, b = "00:00:00"] = s.split("T"); const [y, mo, da] = a.split("-").map(Number); const [h, mi, se] = b.split(":").map(Number); return new Date(y, mo - 1, da, h, mi, se || 0); };
+
+  function mapType(raw) {
+    const t = String(raw || "").toUpperCase();
+    if (/RUN|TREADMILL|TRACK/.test(t)) return "run";
+    if (/CYCL|BIK|RIDE|GRAVEL|MTB|SPIN/.test(t)) return "bike";
+    if (/SWIM/.test(t)) return "swim";
+    if (/HIK|WALK|MOUNTAINEER/.test(t)) return "hike";
+    if (/STRENGTH|FITNESS|HIIT|YOGA|PILATES|CARDIO|TRAINING|ELLIPTICAL|STAIR|ROW/.test(t)) return "strength";
+    return "other";
+  }
+  function prettyRaw(raw) {
+    return String(raw || "").toLowerCase().replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // ---------- Beispieldaten (deterministisch), nur wenn keine Sync-Datei vorhanden ist
+  function sampleData() {
+    let seed = 20261026;
+    const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 1.5;
+    const now = new Date(); const acts = [], dailies = [], sleeps = [];
+    const iso = (d, h, m) => `${dayKey(d)}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+    for (let i = 400; i >= 0; i--) {
+      const d = startOfDay(new Date(now - i * DAY)); const wd = (d.getDay() + 6) % 7; const mon = d.getMonth();
+      const summer = mon >= 4 && mon <= 8; const fit = 1 - i / 900; // langsam steigende Form
+      const add = (type, name, dur, dist, elev, hr, h) => acts.push({
+        id: "s" + acts.length, type, name, start: iso(d, h, Math.floor(rnd() * 50)), dur: Math.round(dur), dist: Math.round(dist),
+        kcal: Math.round(dur / 60 * (hr - 60) * 0.11), avgHr: Math.round(hr), maxHr: Math.round(hr + 18 + rnd() * 10), elev: Math.round(elev)
+      });
+      if (rnd() < 0.06) { /* Pause */ }
+      else if ((wd === 1 || wd === 3) && rnd() < 0.85) {
+        const km = 8 + gauss() * 2.5; const p = (330 - fit * 25 + gauss() * 12);
+        add("RUNNING", wd === 1 ? "Chur Laufen" : "Intervall Rheindamm", km * p, km * 1000, km * 9 + rnd() * 40, 148 + gauss() * 6, 18);
+      } else if (wd === 6 && rnd() < 0.8) {
+        const km = 15 + rnd() * 9 + (fit * 4); const p = 350 - fit * 20 + gauss() * 10;
+        add(rnd() < 0.3 ? "TRAIL_RUNNING" : "RUNNING", "Langer Lauf", km * p, km * 1000, km * 22 + rnd() * 200, 142 + gauss() * 5, 8);
+      } else if (wd === 5 && rnd() < (summer ? 0.85 : 0.35)) {
+        const km = 45 + rnd() * 50; const sp = 26 + gauss() * 2.5;
+        add(rnd() < 0.25 ? "GRAVEL_CYCLING" : "ROAD_BIKING", summer ? "Lenzerheide Runde" : "Domleschg Runde", km / sp * 3600, km * 1000, km * 14 + rnd() * 300, 132 + gauss() * 6, 9);
+      } else if (wd === 2 && rnd() < 0.55) {
+        const m = 1500 + Math.round(rnd() * 8) * 100;
+        add("LAP_SWIMMING", "Hallenbad", m / 1000 * 1260 + gauss() * 120, m, 0, 128 + gauss() * 6, 7);
+      } else if (wd === 0 && rnd() < (summer ? 0.5 : 0.12)) {
+        const km = 9 + rnd() * 9;
+        add("HIKING", "Wanderung Calanda", km * 900 + rnd() * 1800, km * 1000, 500 + rnd() * 900, 112 + gauss() * 6, 9);
+      } else if ((wd === 0 || wd === 4) && rnd() < 0.5) {
+        add("STRENGTH_TRAINING", "Krafttraining", 2400 + rnd() * 1500, 0, 0, 108 + gauss() * 8, 19);
+      } else if (rnd() < 0.08) {
+        const km = 3 + rnd() * 4; add("WALKING", "Spaziergang", km * 720, km * 1000, km * 15, 96 + gauss() * 5, 17);
+      }
+      dailies.push({ date: dayKey(d), steps: Math.round(7600 + gauss() * 2600 + (wd >= 5 ? 1800 : 0)), restingHr: Math.round(52 - fit * 3 + gauss() * 1.6), stress: Math.round(30 + gauss() * 9) });
+      const sl = 7.1 * 3600 + gauss() * 2700 + (wd >= 5 ? 1500 : 0);
+      sleeps.push({ date: dayKey(d), dur: Math.round(sl), deep: Math.round(sl * 0.17), light: Math.round(sl * 0.55), rem: Math.round(sl * 0.22), awake: Math.round(sl * 0.06) });
+    }
+    return { source: "Beispieldaten", sample: true, generated: iso(startOfDay(now), now.getHours(), now.getMinutes()), activities: acts, dailies, sleeps };
+  }
+
+  // ---------- Daten laden: Sync-Datei neben der Seite, importierte Datei oder Beispieldaten
+  const store = { get(k, f) { try { const v = localStorage.getItem("tc." + k); return v == null ? f : JSON.parse(v); } catch (e) { return f; } },
+                  set(k, v) { try { localStorage.setItem("tc." + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+                  del(k) { try { localStorage.removeItem("tc." + k); } catch (e) { /* optional */ } } };
+  let raw, isSample, isImported, ref, acts, dailies, sleeps, firstDate, present, sessionImport = null;
+  function parsePayload(text) {
+    const body = text.trim().replace(/^window\.GARMIN_DATA\s*=\s*/, "").replace(/;\s*$/, "");
+    const d = JSON.parse(body);
+    if (!d || !Array.isArray(d.activities)) throw new Error("Die Datei enthält keine Aktivitäten. Erwartet wird garmin-data.js aus sync.py.");
+    return d;
+  }
+  function loadData() {
+    const file = window.GARMIN_DATA && Array.isArray(window.GARMIN_DATA.activities) ? window.GARMIN_DATA : null;
+    const imported = sessionImport || store.get("data", null);
+    const pick = [file, imported].filter(Boolean).sort((a, b) => String(b.generated || "").localeCompare(String(a.generated || "")))[0];
+    raw = pick || sampleData();
+    isSample = !pick || !!raw.sample; isImported = !!pick && pick === imported;
+    ref = raw.generated ? parseLocal(raw.generated) : new Date();
+    acts = raw.activities.map(a => {
+      const k = mapType(a.type); const start = parseLocal(String(a.start));
+      return { id: a.id, k, rawType: a.type, name: a.name || prettyRaw(a.type), start, dur: +a.dur || 0, dist: (+a.dist || 0) / 1000,
+        kcal: +a.kcal || 0, avgHr: a.avgHr || null, maxHr: a.maxHr || null, elev: +a.elev || 0 };
+    }).filter(a => !isNaN(a.start)).sort((a, b) => a.start - b.start);
+    dailies = (raw.dailies || []).filter(d => d.date).map(d => ({ ...d, day: parseLocal(d.date) }));
+    sleeps = (raw.sleeps || []).filter(s => s.date).map(s => ({ ...s, day: parseLocal(s.date) }));
+    firstDate = acts.length ? acts[0].start : ref;
+    present = TYPES.filter(t => acts.some(a => a.k === t.key));
+  }
+  loadData();
+
+  // ---------- Zustand
+  const state = { days: store.get("days", 84), metric: store.get("metric", "dur"), types: new Set(store.get("types", present.map(t => t.key))), sort: { key: "start", dir: -1 }, shown: 25 };
+  if (![...state.types].some(k => present.some(t => t.key === k))) state.types = new Set(present.map(t => t.key));
+
+  function range(offset = 0) {
+    const end = new Date(+ref + 1);
+    if (!state.days) return { from: startOfDay(firstDate), to: end };
+    const to = new Date(+end - offset * state.days * DAY);
+    return { from: new Date(+to - state.days * DAY), to };
+  }
+  const inRange = (r, d) => d >= r.from && d < r.to;
+  const selected = (r) => acts.filter(a => state.types.has(a.k) && inRange(r, a.start));
+
+  // ---------- Tooltip
+  const tip = document.getElementById("tip");
+  function showTip(html, ev) {
+    tip.innerHTML = html; tip.hidden = false;
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = ev.clientX + 14, y = ev.clientY - h - 12;
+    if (x + w > window.innerWidth - 8) x = ev.clientX - w - 14;
+    if (y < 8) y = ev.clientY + 16;
+    tip.style.left = Math.max(8, x) + "px"; tip.style.top = y + "px";
+  }
+  const hideTip = () => { tip.hidden = true; };
+
+  // ---------- Hilfen für Diagramme
+  function niceMax(v, n = 4) {
+    if (v <= 0) return { max: 1, step: 0.25 };
+    const raw = v / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+    return { max: Math.ceil(v / step) * step, step };
+  }
+  const svgOpen = (w, h, label) => `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${esc(label)}">`;
+  function topRounded(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h);
+    return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+  }
+
+  // ---------- Header & Filter
+  function renderHeader() {
+    const src = document.getElementById("source");
+    src.classList.toggle("sample", isSample);
+    document.getElementById("clearImport").hidden = !isImported;
+    document.getElementById("sourceText").textContent = isSample
+      ? "Beispieldaten · noch kein Sync"
+      : `${isImported ? "Import" : "Garmin Health API"} · Stand ${dateFmt.format(ref)} ${String(ref.getHours()).padStart(2, "0")}:${String(ref.getMinutes()).padStart(2, "0")}`;
+    document.querySelectorAll("#period button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.days === state.days)));
+    document.querySelectorAll("#metric button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.metric === state.metric)));
+    const allOn = present.every(t => state.types.has(t.key));
+    document.getElementById("types").innerHTML =
+      `<button type="button" class="chip" data-type="all" aria-pressed="${allOn}">Alle</button>` +
+      present.map(t => `<button type="button" class="chip" data-type="${t.key}" aria-pressed="${!allOn && state.types.has(t.key)}" style="--c:${col(t.key)}"><i></i>${t.label}</button>`).join("");
+  }
+
+  // ---------- KPIs
+  function totals(list) {
+    const hrList = list.filter(a => a.avgHr);
+    return {
+      n: list.length,
+      dist: list.reduce((s, a) => s + a.dist, 0),
+      dur: list.reduce((s, a) => s + a.dur, 0),
+      elev: list.reduce((s, a) => s + a.elev, 0),
+      kcal: list.reduce((s, a) => s + a.kcal, 0),
+      hr: hrList.length ? hrList.reduce((s, a) => s + a.avgHr * a.dur, 0) / hrList.reduce((s, a) => s + a.dur, 0) : null
+    };
+  }
+  function renderKpis(cur, prev) {
+    const t = totals(cur), p = prev ? totals(prev) : null;
+    const delta = (a, b, invert) => {
+      if (!p || b == null || a == null || b === 0) return `<span class="delta">${p ? "kein Vergleich" : "gesamter Zeitraum"}</span>`;
+      const pct = (a - b) / b * 100; if (Math.abs(pct) < 0.5) return `<span class="delta">± 0 % zur Vorperiode</span>`;
+      const good = invert ? pct < 0 : pct > 0;
+      return `<span class="delta ${good ? "up" : "down"}">${pct > 0 ? "▲" : "▼"} ${num(Math.abs(pct))} % zur Vorperiode</span>`;
+    };
+    const items = [
+      ["Aktivitäten", num(t.n), "", delta(t.n, p && p.n)],
+      ["Distanz", num(t.dist, t.dist < 100 ? 1 : 0), "km", delta(t.dist, p && p.dist)],
+      ["Trainingszeit", num(t.dur / 3600, 1), "h", delta(t.dur, p && p.dur)],
+      ["Höhenmeter", num(t.elev), "m", delta(t.elev, p && p.elev)],
+      ["Aktive Kalorien", num(t.kcal), "kcal", delta(t.kcal, p && p.kcal)],
+      ["Ø Herzfrequenz", t.hr ? num(t.hr) : "–", t.hr ? "bpm" : "", t.hr && p && p.hr ? `<span class="delta">Vorperiode ${num(p.hr)} bpm</span>` : `<span class="delta">zeitgewichtet</span>`]
+    ];
+    document.getElementById("kpis").innerHTML = items.map(([l, v, u, d]) =>
+      `<div class="kpi"><span class="label">${l}</span><span class="v">${v}${u ? `<small>${u}</small>` : ""}</span>${d}</div>`).join("");
+  }
+
+  // ---------- Wochen-/Monatsumfang (gestapelte Säulen)
+  function renderVolume(list, r) {
+    const el = document.getElementById("volChart");
+    const types = present.filter(t => state.types.has(t.key) && (state.metric === "dur" || t.key !== "strength"));
+    document.getElementById("volLegend").innerHTML = types.length > 1 ? types.map(t => `<span style="--c:${col(t.key)}"><i></i>${t.label}</span>`).join("") : "";
+    const weeks = Math.ceil((r.to - startOfWeek(r.from)) / (7 * DAY));
+    const monthly = weeks > 60;
+    document.getElementById("volTitle").textContent = monthly ? "Monatsumfang" : "Wochenumfang";
+    const buckets = []; let c = monthly ? new Date(r.from.getFullYear(), r.from.getMonth(), 1) : startOfWeek(r.from);
+    while (c < r.to) { const n = monthly ? new Date(c.getFullYear(), c.getMonth() + 1, 1) : new Date(c.getFullYear(), c.getMonth(), c.getDate() + 7); buckets.push({ from: c, to: n, v: {} }); c = n; }
+    const val = a => state.metric === "dur" ? a.dur / 3600 : a.dist;
+    list.forEach(a => { const b = buckets.find(b => a.start >= b.from && a.start < b.to); if (b) b.v[a.k] = (b.v[a.k] || 0) + val(a); });
+    const sums = buckets.map(b => types.reduce((s, t) => s + (b.v[t.key] || 0), 0));
+    if (!sums.some(v => v > 0)) { el.innerHTML = `<div class="empty">Keine Aktivitäten mit ${state.metric === "dur" ? "Zeit" : "Distanz"} im Zeitraum.</div>`; return; }
+    const W = Math.max(320, el.clientWidth), H = 270, L = 40, R = 6, T = 22, B = 26;
+    const { max, step } = niceMax(Math.max(...sums));
+    const y = v => T + (H - T - B) * (1 - v / max);
+    const bw = (W - L - R) / buckets.length, gap = Math.max(1, Math.min(6, bw * 0.25));
+    const unit = state.metric === "dur" ? "h" : "km";
+    let s = svgOpen(W, H, `${monthly ? "Monats" : "Wochen"}umfang in ${unit}`);
+    for (let v = 0; v <= max + 1e-9; v += step) s += `<line class="${v ? "grid-l" : "base-l"}" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${num(v, step < 1 ? 1 : 0)}</text>`;
+    s += `<text x="${L - 6}" y="9" text-anchor="end">${unit}</text>`;
+    const labelEvery = Math.ceil(buckets.length / Math.floor((W - L) / 54));
+    buckets.forEach((b, i) => {
+      const x = L + i * bw + gap / 2, w = bw - gap; let acc = 0;
+      const segs = types.filter(t => b.v[t.key] > 0);
+      segs.forEach((t, j) => {
+        const v = b.v[t.key], y0 = y(acc), y1 = y(acc + v); acc += v;
+        const h = Math.max(0, y0 - y1 - (j ? 2 : 0));
+        s += j === segs.length - 1
+          ? `<path class="seg" d="${topRounded(x, y1, w, h, 4)}" fill="${col(t.key)}"/>`
+          : `<rect x="${x}" y="${y1}" width="${w}" height="${h}" fill="${col(t.key)}"/>`;
+      });
+      if (i % labelEvery === 0) s += `<text x="${x + w / 2}" y="${H - 8}" text-anchor="middle">${monthly ? monthYear.format(b.from) : shortDate.format(b.from)}</text>`;
+      s += `<rect class="hit" data-i="${i}" x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T - B}" fill="transparent"/>`;
+    });
+    el.innerHTML = s + "</svg>";
+    el.querySelectorAll(".hit").forEach(h => {
+      h.addEventListener("mousemove", ev => {
+        const b = buckets[+h.dataset.i]; const tot = sums[+h.dataset.i];
+        const head = monthly ? monthYear.format(b.from) : `Woche ab ${dateFmt.format(b.from)}`;
+        const fmt = v => state.metric === "dur" ? hm(v * 3600) : num(v, 1) + " km";
+        showTip(`<b>${head}</b>` + types.filter(t => b.v[t.key]).map(t => `<div class="r"><span><i style="--c:${col(t.key)}"></i>${t.label}</span><span>${fmt(b.v[t.key])}</span></div>`).join("") +
+          `<div class="r"><b>Total</b><b>${fmt(tot)}</b></div>`, ev);
+      });
+      h.addEventListener("mouseleave", hideTip);
+    });
+  }
+
+  // ---------- Verteilung & Bestwerte
+  function renderMix(list) {
+    const tot = list.reduce((s, a) => s + a.dur, 0);
+    const rows = present.filter(t => state.types.has(t.key)).map(t => ({ t, v: list.filter(a => a.k === t.key).reduce((s, a) => s + a.dur, 0) })).sort((a, b) => b.v - a.v);
+    const max = Math.max(1, ...rows.map(r => r.v));
+    document.getElementById("mix").innerHTML = tot ? rows.map(({ t, v }) =>
+      `<div class="mix-row"><span>${t.label}</span><div><div class="bar" style="--c:${col(t.key)};width:${v / max * 100}%"></div></div><span class="val">${num(v / tot * 100)} % · ${num(v / 3600, 1)} h</span></div>`).join("")
+      : `<div class="empty">Keine Aktivitäten im Zeitraum.</div>`;
+    const best = (f, pick) => { const c = list.filter(f); return c.length ? c.reduce((a, b) => pick(b) > pick(a) ? b : a) : null; };
+    const runs = list.filter(a => a.k === "run" && a.dist >= 5);
+    const fast = runs.length ? runs.reduce((a, b) => b.dur / b.dist < a.dur / a.dist ? b : a) : null;
+    const items = [
+      ["Längster Lauf", best(a => a.k === "run", a => a.dist), a => num(a.dist, 1) + " km"],
+      ["Schnellster Lauf ≥ 5 km", fast, a => pace(a.dur / a.dist)],
+      ["Längste Radtour", best(a => a.k === "bike", a => a.dist), a => num(a.dist, 1) + " km"],
+      ["Meiste Höhenmeter", best(a => a.elev > 0, a => a.elev), a => num(a.elev) + " m"]
+    ].filter(([, a]) => a);
+    document.getElementById("bests").innerHTML = items.length ? items.map(([l, a, f]) =>
+      `<div class="best"><span class="label">${l}</span><div class="v">${f(a)}</div><div class="d">${dateFmt.format(a.start)} · ${esc(a.name)}</div></div>`).join("")
+      : `<div class="note">Keine Bestwerte für diese Auswahl.</div>`;
+  }
+
+  // ---------- Lauf-Pace
+  function renderPace(list) {
+    const el = document.getElementById("paceChart");
+    const runs = list.filter(a => a.k === "run" && a.dist >= 1 && a.dur > 0).map(a => ({ a, p: a.dur / a.dist }));
+    if (!state.types.has("run")) { el.innerHTML = `<div class="empty">Laufen ist im Filter ausgeblendet.</div>`; return; }
+    if (runs.length < 2) { el.innerHTML = `<div class="empty">Zu wenige Läufe im Zeitraum.</div>`; return; }
+    const W = Math.max(320, el.clientWidth), H = 240, L = 46, R = 10, T = 12, B = 26;
+    const ps = runs.map(r => r.p); let lo = Math.min(...ps), hi = Math.max(...ps);
+    lo = Math.floor((lo - 10) / 15) * 15; hi = Math.ceil((hi + 10) / 15) * 15;
+    const t0 = +runs[0].a.start, t1 = Math.max(+runs[runs.length - 1].a.start, t0 + DAY);
+    const x = t => L + (W - L - R) * (t - t0) / (t1 - t0);
+    const y = p => T + (H - T - B) * (p - lo) / (hi - lo); // schneller (kleiner) = oben
+    const stepS = (hi - lo) / 15 > 6 ? 30 : 15;
+    let s = svgOpen(W, H, "Lauf-Pace in Minuten pro Kilometer");
+    for (let p = lo; p <= hi; p += stepS) s += `<line class="${p === hi ? "base-l" : "grid-l"}" x1="${L}" x2="${W - R}" y1="${y(p)}" y2="${y(p)}"/><text x="${L - 6}" y="${y(p) + 4}" text-anchor="end">${clock(p)}</text>`;
+    const months = []; let m = new Date(new Date(t0).getFullYear(), new Date(t0).getMonth() + 1, 1);
+    while (+m <= t1) { months.push(new Date(m)); m.setMonth(m.getMonth() + 1); }
+    const every = Math.ceil(months.length / Math.floor((W - L) / 56)) || 1;
+    months.forEach((d, i) => { if (i % every === 0) s += `<text x="${x(+d)}" y="${H - 8}" text-anchor="middle">${monthFmt.format(d)}</text>`; });
+    const avg = runs.map((r, i) => { const w = runs.slice(Math.max(0, i - 4), i + 1); return [x(+r.a.start), y(w.reduce((s, q) => s + q.p, 0) / w.length)]; });
+    runs.forEach(r => { s += `<circle cx="${x(+r.a.start)}" cy="${y(r.p)}" r="4" fill="var(--s-run)" fill-opacity=".45" stroke="var(--surface)" stroke-width="1.5"/>`; });
+    s += `<path d="M${avg.map(p => p.join(",")).join("L")}" fill="none" stroke="var(--s-run)" stroke-width="2" stroke-linejoin="round"/>`;
+    const lastAvg = avg[avg.length - 1];
+    s += `<circle cx="${lastAvg[0]}" cy="${lastAvg[1]}" r="5" fill="var(--s-run)" stroke="var(--surface)" stroke-width="2"/>`;
+    s += `<circle id="paceHi" r="7" fill="none" stroke="var(--ink)" stroke-width="2" visibility="hidden"/>`;
+    s += `<rect id="paceHit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent"/>`;
+    el.innerHTML = s + "</svg>";
+    const svg = el.querySelector("svg"), hi_ = el.querySelector("#paceHi");
+    el.querySelector("#paceHit").addEventListener("mousemove", ev => {
+      const box = svg.getBoundingClientRect(); const mx = (ev.clientX - box.left) * W / box.width;
+      let best = runs[0], bd = Infinity; runs.forEach(r => { const d = Math.abs(x(+r.a.start) - mx); if (d < bd) { bd = d; best = r; } });
+      hi_.setAttribute("cx", x(+best.a.start)); hi_.setAttribute("cy", y(best.p)); hi_.setAttribute("visibility", "visible");
+      const a = best.a;
+      showTip(`<b>${weekday.format(a.start)}, ${dateFmt.format(a.start)}</b><div>${esc(a.name)}</div><div class="r"><span>Pace</span><span>${pace(best.p)}</span></div><div class="r"><span>Distanz</span><span>${num(a.dist, 2)} km</span></div><div class="r"><span>Zeit</span><span>${clock(a.dur)}</span></div>${a.avgHr ? `<div class="r"><span>Ø HF</span><span>${a.avgHr} bpm</span></div>` : ""}`, ev);
+    });
+    el.querySelector("#paceHit").addEventListener("mouseleave", () => { hideTip(); hi_.setAttribute("visibility", "hidden"); });
+  }
+
+  // ---------- Kalender-Heatmap
+  function renderHeat() {
+    const el = document.getElementById("heat");
+    const end = startOfDay(ref), start = new Date(+startOfWeek(end) - 51 * 7 * DAY);
+    const mins = {}; acts.filter(a => state.types.has(a.k) && a.start >= start).forEach(a => { const k = dayKey(a.start); mins[k] = (mins[k] || 0) + a.dur / 60; });
+    const bins = [0, 30, 60, 90, 120]; const lvl = v => !v ? 0 : v < 30 ? 1 : v < 60 ? 2 : v < 90 ? 3 : 4;
+    const avail = Math.max(el.parentElement.clientWidth, 300);
+    const cell = Math.max(9, Math.min(15, Math.floor((avail - 30) / 52) - 2)), g = 2, L = 28, T = 16;
+    const W = L + 52 * (cell + g), H = T + 7 * (cell + g);
+    let s = svgOpen(W, H, "Trainingskalender, Minuten pro Tag");
+    ["Mo", "Mi", "Fr"].forEach((d, i) => s += `<text x="0" y="${T + (i * 2) * (cell + g) + cell - 1}">${d}</text>`);
+    let lastMonth = -1; const cells = [];
+    for (let w = 0; w < 52; w++) for (let d = 0; d < 7; d++) {
+      const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7 + d); if (day > end) continue;
+      if (d === 0 && day.getMonth() !== lastMonth) { lastMonth = day.getMonth(); if (w < 51) s += `<text x="${L + w * (cell + g)}" y="${T - 5}">${monthFmt.format(day)}</text>`; }
+      const v = mins[dayKey(day)] || 0; cells.push({ day, v });
+      s += `<rect data-c="${cells.length - 1}" x="${L + w * (cell + g)}" y="${T + d * (cell + g)}" width="${cell}" height="${cell}" rx="2" fill="var(--q${lvl(v)})"/>`;
+    }
+    el.style.width = W + "px"; el.innerHTML = s + "</svg>";
+    el.querySelectorAll("rect").forEach(r => {
+      r.addEventListener("mousemove", ev => { const c = cells[+r.dataset.c]; showTip(`<b>${weekday.format(c.day)}, ${dateFmt.format(c.day)}</b><div>${c.v ? hm(c.v * 60) + " Training" : "kein Training"}</div>`, ev); });
+      r.addEventListener("mouseleave", hideTip);
+    });
+    document.getElementById("heatLegend").innerHTML = `<span>weniger</span>` + [0, 1, 2, 3, 4].map(i => `<i style="background:var(--q${i})" title="${i ? (i === 4 ? "≥ 90 min" : `${bins[i - 1]}–${bins[i]} min`) : "0 min"}"></i>`).join("") + `<span>mehr · Stufen 0 / &lt;30 / &lt;60 / &lt;90 / ≥90 min</span>`;
+  }
+
+  // ---------- Erholung: drei kleine Diagramme, je eigene Achse
+  function dayChart(el, pts, o) {
+    if (pts.length < 2) { el.innerHTML = `<div class="empty">Keine Werte im Zeitraum.</div>`; return; }
+    const W = Math.max(260, el.clientWidth), H = 170, L = 40, R = 8, T = 10, B = 24;
+    const vals = pts.map(p => p.v); let lo = o.zero ? 0 : Math.min(...vals), hi = Math.max(...vals);
+    if (!o.zero) { const pad = Math.max(1, (hi - lo) * 0.15); lo = Math.floor(lo - pad); hi = Math.ceil(hi + pad); }
+    const nm = niceMax(hi - (o.zero ? 0 : lo), 3); if (o.zero) hi = nm.max;
+    const t0 = +pts[0].d, t1 = +pts[pts.length - 1].d;
+    const bw = (W - L - R) / pts.length;
+    const x = t => L + bw / 2 + (W - L - R - bw) * (t - t0) / Math.max(1, t1 - t0);
+    const y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+    let s = svgOpen(W, H, o.label);
+    const step = o.zero ? nm.step : Math.max(1, Math.round((hi - lo) / 3));
+    for (let v = lo; v <= hi + 1e-9; v += step) s += `<line class="${v === lo ? "base-l" : "grid-l"}" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${o.tick(v)}</text>`;
+    s += `<text x="${L}" y="${H - 6}">${shortDate.format(pts[0].d)}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${shortDate.format(pts[pts.length - 1].d)}</text>`;
+    if (o.kind === "bar") {
+      const w = Math.max(1, bw - Math.min(2, bw * 0.3));
+      pts.forEach(p => { const h = y(lo) - y(p.v); s += h > 0 ? `<path d="${topRounded(x(+p.d) - w / 2, y(p.v), w, h, Math.min(3, w / 2))}" fill="${o.color}" fill-opacity="${o.avg ? .55 : 1}"/>` : ""; });
+    } else {
+      s += `<path d="M${pts.map(p => `${x(+p.d)},${y(p.v)}`).join("L")}" fill="none" stroke="${o.color}" stroke-width="2" stroke-linejoin="round"/>`;
+    }
+    if (o.avg) {
+      const av = pts.map((p, i) => { const w = pts.slice(Math.max(0, i - 6), i + 1); return `${x(+p.d)},${y(w.reduce((s, q) => s + q.v, 0) / w.length)}`; });
+      s += `<path d="M${av.join("L")}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>`;
+    }
+    const last = pts[pts.length - 1];
+    s += `<circle cx="${x(+last.d)}" cy="${y(last.v)}" r="4.5" fill="${o.color}" stroke="var(--surface)" stroke-width="2"/>`;
+    s += `<line class="xh" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--axis)" visibility="hidden"/>`;
+    s += `<rect class="hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent"/>`;
+    el.innerHTML = s + "</svg>";
+    const svg = el.querySelector("svg"), xh = el.querySelector(".xh"), hit = el.querySelector(".hit");
+    hit.addEventListener("mousemove", ev => {
+      const box = svg.getBoundingClientRect(); const mx = (ev.clientX - box.left) * W / box.width;
+      const i = Math.max(0, Math.min(pts.length - 1, Math.round((mx - L - bw / 2) / Math.max(1e-6, (W - L - R - bw)) * (pts.length - 1))));
+      const p = pts[i]; xh.setAttribute("x1", x(+p.d)); xh.setAttribute("x2", x(+p.d)); xh.setAttribute("visibility", "visible");
+      showTip(`<b>${weekday.format(p.d)}, ${dateFmt.format(p.d)}</b><div>${o.fmt(p)}</div>`, ev);
+    });
+    hit.addEventListener("mouseleave", () => { hideTip(); xh.setAttribute("visibility", "hidden"); });
+  }
+  function renderHealth(r) {
+    const box = document.getElementById("health");
+    box.hidden = !dailies.length && !sleeps.length;
+    if (box.hidden) return;
+    const dRange = state.days ? r : { from: new Date(+ref - 365 * DAY), to: r.to }; // "Alles" zeigt hier max. 12 Monate
+    const dd = dailies.filter(d => inRange(dRange, d.day));
+    dayChart(document.getElementById("rhrChart"), dd.filter(d => d.restingHr).map(d => ({ d: d.day, v: d.restingHr })),
+      { kind: "line", color: "var(--s-bike)", label: "Ruhepuls pro Tag", tick: v => num(v), fmt: p => `Ruhepuls ${p.v} bpm` });
+    dayChart(document.getElementById("sleepChart"), sleeps.filter(s => inRange(dRange, s.day) && s.dur).map(s => ({ d: s.day, v: s.dur / 3600, s })),
+      { kind: "bar", zero: true, color: "var(--s-strength)", label: "Schlafdauer pro Nacht", tick: v => num(v), fmt: p => `Schlaf ${hm(p.s.dur)}` + (p.s.deep ? `<br>Tief ${hm(p.s.deep)} · REM ${hm(p.s.rem)}` : "") });
+    dayChart(document.getElementById("stepsChart"), dd.filter(d => d.steps != null).map(d => ({ d: d.day, v: d.steps })),
+      { kind: "bar", zero: true, avg: true, color: "var(--s-swim)", label: "Schritte pro Tag", tick: v => v >= 1000 ? num(v / 1000) + "k" : num(v), fmt: p => `${num(p.v)} Schritte` });
+  }
+
+  // ---------- Tabelle
+  const COLS = [
+    { key: "start", label: "Datum", f: a => `${weekday.format(a.start)} ${dateFmt.format(a.start)}`, v: a => +a.start },
+    { key: "k", label: "Sportart", f: a => `<span class="tag" style="--c:${col(a.k)}"><i></i>${esc(prettyRaw(a.rawType))}</span>`, v: a => a.k },
+    { key: "name", label: "Titel", cls: "name", f: a => esc(a.name), v: a => a.name.toLowerCase() },
+    { key: "dist", label: "Distanz", num: true, f: a => a.dist ? num(a.dist, 2) + " km" : "–", v: a => a.dist },
+    { key: "dur", label: "Zeit", num: true, f: a => clock(a.dur), v: a => a.dur },
+    { key: "pace", label: "Pace/Tempo", num: true, f: a => !a.dist ? "–" : a.k === "bike" ? num(a.dist / (a.dur / 3600), 1) + " km/h" : a.k === "swim" ? clock(a.dur / (a.dist * 10)) + " /100 m" : pace(a.dur / a.dist), v: a => a.dist ? a.dur / a.dist : Infinity },
+    { key: "elev", label: "Hm", num: true, f: a => a.elev ? num(a.elev) : "–", v: a => a.elev },
+    { key: "avgHr", label: "Ø HF", num: true, f: a => a.avgHr || "–", v: a => a.avgHr || 0 },
+    { key: "kcal", label: "kcal", num: true, f: a => num(a.kcal), v: a => a.kcal }
+  ];
+  function renderList(list) {
+    const c = COLS.find(c => c.key === state.sort.key);
+    const rows = [...list].sort((a, b) => { const x = c.v(a), y = c.v(b); return (x > y ? 1 : x < y ? -1 : 0) * state.sort.dir; });
+    document.getElementById("listCount").textContent = `${num(list.length)} Aktivitäten im Zeitraum`;
+    document.getElementById("list").innerHTML =
+      `<thead><tr>${COLS.map(c => `<th class="${c.num ? "num" : ""}"${c.key === state.sort.key ? ` aria-sort="${state.sort.dir > 0 ? "ascending" : "descending"}"` : ""}><button type="button" data-sort="${c.key}">${c.label}${c.key === state.sort.key ? (state.sort.dir > 0 ? " ↑" : " ↓") : ""}</button></th>`).join("")}</tr></thead>` +
+      `<tbody>${rows.slice(0, state.shown).map(a => `<tr>${COLS.map(c => `<td class="${c.num ? "num" : ""} ${c.cls || ""}">${c.f(a)}</td>`).join("")}</tr>`).join("") ||
+        `<tr><td colspan="${COLS.length}" class="empty">Keine Aktivitäten im Zeitraum.</td></tr>`}</tbody>`;
+    document.getElementById("more").hidden = rows.length <= state.shown;
+  }
+
+  function renderFoot() {
+    document.getElementById("foot").innerHTML = isSample
+      ? `Angezeigt werden generierte Beispieldaten, keine echten Messwerte. Eigene Daten: im Ordner <code>garmin</code> einmal <code>python sync.py auth</code>, danach <code>python sync.py pull --days 365</code> ausführen und die Datei <code>garmin/data/garmin-data.js</code> über «Daten importieren» laden oder aufs Fenster ziehen.`
+      : `Quelle: ${esc(raw.source || "Garmin Health API")}${isImported ? " (importiert, nur in diesem Browser gespeichert)" : ""}, ${num(acts.length)} Aktivitäten, ${num(dailies.length)} Tageswerte, ${num(sleeps.length)} Nächte. Aktualisieren: <code>python sync.py pull</code>, danach die neue <code>garmin-data.js</code> importieren.`;
+  }
+
+  // ---------- Gesamtablauf
+  function render() {
+    const r = range(0), cur = selected(r), prev = state.days ? selected(range(1)) : null;
+    renderHeader(); renderKpis(cur, prev); renderVolume(cur, r); renderMix(cur); renderPace(cur); renderHeat(); renderHealth(r); renderList(cur); renderFoot();
+  }
+
+  document.getElementById("period").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; state.days = +b.dataset.days; state.shown = 25; store.set("days", state.days); render(); });
+  document.getElementById("metric").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; state.metric = b.dataset.metric; store.set("metric", state.metric); render(); });
+  document.getElementById("types").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    const allOn = present.every(t => state.types.has(t.key));
+    if (b.dataset.type === "all") state.types = new Set(present.map(t => t.key));
+    else if (allOn) state.types = new Set([b.dataset.type]);
+    else { state.types.has(b.dataset.type) ? state.types.delete(b.dataset.type) : state.types.add(b.dataset.type); if (!state.types.size) state.types = new Set(present.map(t => t.key)); }
+    store.set("types", [...state.types]); state.shown = 25; render();
+  });
+  document.getElementById("list").addEventListener("click", e => {
+    const b = e.target.closest("button[data-sort]"); if (!b) return;
+    state.sort = state.sort.key === b.dataset.sort ? { key: b.dataset.sort, dir: -state.sort.dir } : { key: b.dataset.sort, dir: b.dataset.sort === "name" || b.dataset.sort === "k" ? 1 : -1 };
+    renderList(selected(range(0)));
+  });
+  document.getElementById("more").addEventListener("click", () => { state.shown += 25; renderList(selected(range(0))); });
+  const msg = (text, err) => { const m = document.getElementById("msg"); m.textContent = text; m.classList.toggle("err", !!err); m.hidden = !text; };
+  function importFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const d = parsePayload(String(reader.result));
+        const saved = store.set("data", d); sessionImport = d;
+        loadData(); state.types = new Set(present.map(t => t.key)); state.shown = 25; render();
+        msg(`${num(acts.length)} Aktivitäten aus «${file.name}» geladen.` + (saved ? "" : " Der Browser erlaubt kein Speichern, nach dem Neuladen ist der Import weg."));
+      } catch (e) { msg(`«${file.name}» konnte nicht gelesen werden: ${e.message}`, true); }
+    };
+    reader.onerror = () => msg(`«${file.name}» konnte nicht gelesen werden.`, true);
+    reader.readAsText(file);
+  }
+  document.getElementById("importFile").addEventListener("change", e => { importFile(e.target.files[0]); e.target.value = ""; });
+  document.getElementById("clearImport").addEventListener("click", () => {
+    store.del("data"); sessionImport = null; loadData(); state.types = new Set(present.map(t => t.key)); render(); msg("Import entfernt.");
+  });
+  document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("dragging"); });
+  document.addEventListener("dragleave", e => { if (!e.relatedTarget) document.body.classList.remove("dragging"); });
+  document.addEventListener("drop", e => { e.preventDefault(); document.body.classList.remove("dragging"); importFile(e.dataTransfer.files[0]); });
+  let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 150); });
+  render();
+})();
+</script>
+</body>
+</html>
