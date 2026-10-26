@@ -75,6 +75,16 @@ header.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; j
 .source .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
 .source.sample .dot { background: var(--s-hike); }
 
+.io { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { display: inline-flex; align-items: center; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+  border-radius: 8px; padding: 5px 12px; font-size: 14px; font-weight: 500; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--ink-2); border-color: var(--line); }
+.btn:hover { filter: brightness(1.08); }
+.vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+.vh:focus-visible + .btn { outline: 2px solid var(--accent); outline-offset: 2px; }
+.msg { margin: 0; font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
+.msg.err { border-color: var(--bad); color: var(--bad); }
+body.dragging .wrap { outline: 2px dashed var(--accent); outline-offset: 8px; border-radius: 12px; }
 .controls { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; }
 .seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; flex-wrap: wrap; }
 .seg button { border: 0; background: transparent; padding: 5px 11px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; color: var(--ink-2); }
@@ -167,8 +177,14 @@ footer code { font-size: 12px; background: var(--surface); border: 1px solid var
       <h1>Trainingscockpit</h1>
       <p class="sub">Aktivitäten, Umfang und Erholung aus der Garmin Health API</p>
     </div>
-    <span class="source" id="source"><span class="dot"></span><span id="sourceText"></span></span>
+    <div class="io">
+      <span class="source" id="source"><span class="dot"></span><span id="sourceText"></span></span>
+      <input type="file" id="importFile" class="vh" accept=".js,.json,application/json,text/javascript">
+      <label class="btn" for="importFile">Daten importieren</label>
+      <button type="button" class="btn ghost" id="clearImport" hidden>Import entfernen</button>
+    </div>
   </header>
+  <p class="msg" id="msg" role="status" hidden></p>
 
   <div class="controls">
     <div class="seg" id="period" role="group" aria-label="Zeitraum">
@@ -339,23 +355,37 @@ footer code { font-size: 12px; background: var(--surface); border: 1px solid var
     return { source: "Beispieldaten", sample: true, generated: iso(startOfDay(now), now.getHours(), now.getMinutes()), activities: acts, dailies, sleeps };
   }
 
-  // ---------- Daten laden
-  const raw = window.GARMIN_DATA && Array.isArray(window.GARMIN_DATA.activities) ? window.GARMIN_DATA : sampleData();
-  const isSample = !!raw.sample || !window.GARMIN_DATA;
-  const ref = raw.generated ? parseLocal(raw.generated) : new Date();
-  const acts = raw.activities.map(a => {
-    const k = mapType(a.type); const start = parseLocal(a.start);
-    return { id: a.id, k, rawType: a.type, name: a.name || prettyRaw(a.type), start, dur: +a.dur || 0, dist: (+a.dist || 0) / 1000,
-      kcal: +a.kcal || 0, avgHr: a.avgHr || null, maxHr: a.maxHr || null, elev: +a.elev || 0 };
-  }).filter(a => !isNaN(a.start)).sort((a, b) => a.start - b.start);
-  const dailies = (raw.dailies || []).map(d => ({ ...d, day: parseLocal(d.date) }));
-  const sleeps = (raw.sleeps || []).map(s => ({ ...s, day: parseLocal(s.date) }));
-  const firstDate = acts.length ? acts[0].start : ref;
+  // ---------- Daten laden: Sync-Datei neben der Seite, importierte Datei oder Beispieldaten
+  const store = { get(k, f) { try { const v = localStorage.getItem("tc." + k); return v == null ? f : JSON.parse(v); } catch (e) { return f; } },
+                  set(k, v) { try { localStorage.setItem("tc." + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+                  del(k) { try { localStorage.removeItem("tc." + k); } catch (e) { /* optional */ } } };
+  let raw, isSample, isImported, ref, acts, dailies, sleeps, firstDate, present, sessionImport = null;
+  function parsePayload(text) {
+    const body = text.trim().replace(/^window\.GARMIN_DATA\s*=\s*/, "").replace(/;\s*$/, "");
+    const d = JSON.parse(body);
+    if (!d || !Array.isArray(d.activities)) throw new Error("Die Datei enthält keine Aktivitäten. Erwartet wird garmin-data.js aus sync.py.");
+    return d;
+  }
+  function loadData() {
+    const file = window.GARMIN_DATA && Array.isArray(window.GARMIN_DATA.activities) ? window.GARMIN_DATA : null;
+    const imported = sessionImport || store.get("data", null);
+    const pick = [file, imported].filter(Boolean).sort((a, b) => String(b.generated || "").localeCompare(String(a.generated || "")))[0];
+    raw = pick || sampleData();
+    isSample = !pick || !!raw.sample; isImported = !!pick && pick === imported;
+    ref = raw.generated ? parseLocal(raw.generated) : new Date();
+    acts = raw.activities.map(a => {
+      const k = mapType(a.type); const start = parseLocal(String(a.start));
+      return { id: a.id, k, rawType: a.type, name: a.name || prettyRaw(a.type), start, dur: +a.dur || 0, dist: (+a.dist || 0) / 1000,
+        kcal: +a.kcal || 0, avgHr: a.avgHr || null, maxHr: a.maxHr || null, elev: +a.elev || 0 };
+    }).filter(a => !isNaN(a.start)).sort((a, b) => a.start - b.start);
+    dailies = (raw.dailies || []).filter(d => d.date).map(d => ({ ...d, day: parseLocal(d.date) }));
+    sleeps = (raw.sleeps || []).filter(s => s.date).map(s => ({ ...s, day: parseLocal(s.date) }));
+    firstDate = acts.length ? acts[0].start : ref;
+    present = TYPES.filter(t => acts.some(a => a.k === t.key));
+  }
+  loadData();
 
   // ---------- Zustand
-  const store = { get(k, f) { try { const v = localStorage.getItem("tc." + k); return v == null ? f : JSON.parse(v); } catch (e) { return f; } },
-                  set(k, v) { try { localStorage.setItem("tc." + k, JSON.stringify(v)); } catch (e) { /* optional */ } } };
-  const present = TYPES.filter(t => acts.some(a => a.k === t.key));
   const state = { days: store.get("days", 84), metric: store.get("metric", "dur"), types: new Set(store.get("types", present.map(t => t.key))), sort: { key: "start", dir: -1 }, shown: 25 };
   if (![...state.types].some(k => present.some(t => t.key === k))) state.types = new Set(present.map(t => t.key));
 
@@ -397,9 +427,10 @@ footer code { font-size: 12px; background: var(--surface); border: 1px solid var
   function renderHeader() {
     const src = document.getElementById("source");
     src.classList.toggle("sample", isSample);
+    document.getElementById("clearImport").hidden = !isImported;
     document.getElementById("sourceText").textContent = isSample
       ? "Beispieldaten · noch kein Sync"
-      : `Garmin Health API · Stand ${dateFmt.format(ref)} ${String(ref.getHours()).padStart(2, "0")}:${String(ref.getMinutes()).padStart(2, "0")}`;
+      : `${isImported ? "Import" : "Garmin Health API"} · Stand ${dateFmt.format(ref)} ${String(ref.getHours()).padStart(2, "0")}:${String(ref.getMinutes()).padStart(2, "0")}`;
     document.querySelectorAll("#period button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.days === state.days)));
     document.querySelectorAll("#metric button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.metric === state.metric)));
     const allOn = present.every(t => state.types.has(t.key));
@@ -653,8 +684,8 @@ footer code { font-size: 12px; background: var(--surface); border: 1px solid var
 
   function renderFoot() {
     document.getElementById("foot").innerHTML = isSample
-      ? `Angezeigt werden generierte Beispieldaten, keine echten Messwerte. Eigene Daten: im Ordner <code>garmin</code> einmal <code>python sync.py auth</code>, danach <code>python sync.py pull --days 365</code> ausführen und diese Seite neu laden.`
-      : `Quelle: ${esc(raw.source || "Garmin Health API")}, ${num(acts.length)} Aktivitäten, ${num(dailies.length)} Tageswerte, ${num(sleeps.length)} Nächte. Aktualisieren mit <code>python sync.py pull</code>.`;
+      ? `Angezeigt werden generierte Beispieldaten, keine echten Messwerte. Eigene Daten: im Ordner <code>garmin</code> einmal <code>python sync.py auth</code>, danach <code>python sync.py pull --days 365</code> ausführen und die Datei <code>garmin/data/garmin-data.js</code> über «Daten importieren» laden oder aufs Fenster ziehen.`
+      : `Quelle: ${esc(raw.source || "Garmin Health API")}${isImported ? " (importiert, nur in diesem Browser gespeichert)" : ""}, ${num(acts.length)} Aktivitäten, ${num(dailies.length)} Tageswerte, ${num(sleeps.length)} Nächte. Aktualisieren: <code>python sync.py pull</code>, danach die neue <code>garmin-data.js</code> importieren.`;
   }
 
   // ---------- Gesamtablauf
@@ -679,6 +710,28 @@ footer code { font-size: 12px; background: var(--surface); border: 1px solid var
     renderList(selected(range(0)));
   });
   document.getElementById("more").addEventListener("click", () => { state.shown += 25; renderList(selected(range(0))); });
+  const msg = (text, err) => { const m = document.getElementById("msg"); m.textContent = text; m.classList.toggle("err", !!err); m.hidden = !text; };
+  function importFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const d = parsePayload(String(reader.result));
+        const saved = store.set("data", d); sessionImport = d;
+        loadData(); state.types = new Set(present.map(t => t.key)); state.shown = 25; render();
+        msg(`${num(acts.length)} Aktivitäten aus «${file.name}» geladen.` + (saved ? "" : " Der Browser erlaubt kein Speichern, nach dem Neuladen ist der Import weg."));
+      } catch (e) { msg(`«${file.name}» konnte nicht gelesen werden: ${e.message}`, true); }
+    };
+    reader.onerror = () => msg(`«${file.name}» konnte nicht gelesen werden.`, true);
+    reader.readAsText(file);
+  }
+  document.getElementById("importFile").addEventListener("change", e => { importFile(e.target.files[0]); e.target.value = ""; });
+  document.getElementById("clearImport").addEventListener("click", () => {
+    store.del("data"); sessionImport = null; loadData(); state.types = new Set(present.map(t => t.key)); render(); msg("Import entfernt.");
+  });
+  document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("dragging"); });
+  document.addEventListener("dragleave", e => { if (!e.relatedTarget) document.body.classList.remove("dragging"); });
+  document.addEventListener("drop", e => { e.preventDefault(); document.body.classList.remove("dragging"); importFile(e.dataTransfer.files[0]); });
   let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 150); });
   render();
 })();
